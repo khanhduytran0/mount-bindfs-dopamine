@@ -3,8 +3,28 @@
 #import <sys/mount.h>
 #import <sys/param.h>
 #import <unistd.h>
+#import <rootless.h>
 
-#define LIBJAILBREAK_PATH "/var/jb/usr/lib/libjailbreak.dylib"
+#define LIBJAILBREAK_PATH ROOT_PATH("/usr/lib/libjailbreak.dylib")
+
+int (*jbclient_root_steal_ucred)(uint64_t ucredToSteal, uint64_t *orgUcred);
+
+void execute_unsandboxed(void (^block)(void))
+{
+	uint64_t credBackup = 0;
+	jbclient_root_steal_ucred(0, &credBackup);
+	block();
+	jbclient_root_steal_ucred(credBackup, NULL);
+}
+
+int mount_unsandboxed(const char *type, const char *dir, int flags, void *data)
+{
+	__block int r = 0;
+	execute_unsandboxed(^{
+		r = mount(type, dir, flags, data);
+	});
+	return r;
+}
 
 int main(int argc, char *argv[]) {
     @autoreleasepool {
@@ -19,15 +39,8 @@ int main(int argc, char *argv[]) {
         }
 
         void *libjailbreak = dlopen(LIBJAILBREAK_PATH, RTLD_NOW);
+        jbclient_root_steal_ucred = dlsym(libjailbreak, "jbclient_root_steal_ucred");
 
-        int (*jbdInitPPLRW)(void) = dlsym(libjailbreak, "jbdInitPPLRW");
-        void (*run_unsandboxed)(void (^block)(void)) = dlsym(libjailbreak, "run_unsandboxed");
-
-        jbdInitPPLRW();
-        run_unsandboxed(^{
-            mount("bindfs", argv[2], MNT_RDONLY, argv[1]);
-        });
-
-        return 0;
+        return mount_unsandboxed("bindfs", argv[2], MNT_RDONLY, argv[1]);
     }
 }
