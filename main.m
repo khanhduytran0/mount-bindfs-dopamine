@@ -7,6 +7,8 @@
 
 #define LIBJAILBREAK_PATH ROOT_PATH("/usr/lib/libjailbreak.dylib")
 
+char *sandbox_extension_issue_file_to_self(const char *extension_class, const char *path, uint32_t flags);
+
 int (*jbclient_root_steal_ucred)(uint64_t ucredToSteal, uint64_t *orgUcred);
 
 void execute_unsandboxed(void (^block)(void))
